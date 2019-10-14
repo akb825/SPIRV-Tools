@@ -298,7 +298,6 @@ if (NOT "${SPIRV_SKIP_TESTS}")
 endif()
 
 set(SPIRV_LIBRARIES "-lSPIRV-Tools -lSPIRV-Tools-link -lSPIRV-Tools-opt")
-set(SPIRV_SHARED_LIBRARIES "-lSPIRV-Tools-shared")
 
 # Build pkg-config file
 # Use a first-class target so it's regenerated when relevant files are updated.
@@ -321,7 +320,6 @@ add_custom_target(spirv-tools-shared-pkg-config ALL
                       -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
                       -DCMAKE_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
                       -DCMAKE_INSTALL_INCLUDEDIR=${CMAKE_INSTALL_INCLUDEDIR}
-                      -DSPIRV_SHARED_LIBRARIES=${SPIRV_SHARED_LIBRARIES}
                       -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_pkg_config.cmake
         DEPENDS "CHANGES" "cmake/SPIRV-Tools-shared.pc.in" "cmake/write_pkg_config.cmake")
 

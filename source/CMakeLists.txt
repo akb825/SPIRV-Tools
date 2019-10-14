@@ -197,9 +197,9 @@ set_source_files_properties(
   PROPERTIES OBJECT_DEPENDS "${PCH_DEPENDS}")
 
 add_subdirectory(opt)
-add_subdirectory(reduce)
-add_subdirectory(fuzz)
-add_subdirectory(link)
+#add_subdirectory(reduce)
+#add_subdirectory(fuzz)
+#add_subdirectory(link)
 
 set(SPIRV_SOURCES
   ${spirv-tools_SOURCE_DIR}/include/spirv-tools/libspirv.h
@@ -348,34 +348,15 @@ set_property(TARGET ${SPIRV_TOOLS} PROPERTY FOLDER "SPIRV-Tools libraries")
 spvtools_check_symbol_exports(${SPIRV_TOOLS})
 add_dependencies( ${SPIRV_TOOLS} core_tables enum_string_mapping extinst_tables )
 
-add_library(${SPIRV_TOOLS}-shared SHARED ${SPIRV_SOURCES})
-spvtools_default_compile_options(${SPIRV_TOOLS}-shared)
-target_include_directories(${SPIRV_TOOLS}-shared
-  PUBLIC
-    $<BUILD_INTERFACE:${spirv-tools_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-  PRIVATE ${spirv-tools_BINARY_DIR}
-  PRIVATE ${SPIRV_HEADER_INCLUDE_DIR}
-  )
-set_target_properties(${SPIRV_TOOLS}-shared PROPERTIES CXX_VISIBILITY_PRESET hidden)
-set_property(TARGET ${SPIRV_TOOLS}-shared PROPERTY FOLDER "SPIRV-Tools libraries")
-spvtools_check_symbol_exports(${SPIRV_TOOLS}-shared)
-target_compile_definitions(${SPIRV_TOOLS}-shared
-  PRIVATE SPIRV_TOOLS_IMPLEMENTATION
-  PUBLIC SPIRV_TOOLS_SHAREDLIB
-)
-add_dependencies( ${SPIRV_TOOLS}-shared core_tables enum_string_mapping extinst_tables )
-
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   find_library(LIBRT rt)
   if(LIBRT)
     target_link_libraries(${SPIRV_TOOLS} ${LIBRT})
-    target_link_libraries(${SPIRV_TOOLS}-shared ${LIBRT})
   endif()
 endif()
 
 if(ENABLE_SPIRV_TOOLS_INSTALL)
-  install(TARGETS ${SPIRV_TOOLS} ${SPIRV_TOOLS}-shared EXPORT ${SPIRV_TOOLS}Targets
+  install(TARGETS ${SPIRV_TOOLS} EXPORT ${SPIRV_TOOLS}Targets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
