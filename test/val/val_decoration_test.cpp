@@ -700,6 +700,61 @@ TEST_F(ValidateDecorations, RuntimeArrayOfDescriptorSetsIsAllowed) {
   EXPECT_EQ(SPV_SUCCESS, ValidateAndRetrieveValidationState());
 }
 
+TEST_F(ValidateDecorations, BlockDecoratingArrayBad) {
+  std::string spirv = R"(
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 430
+               OpDecorate %Output Block
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+        %int = OpTypeInt 32 1
+      %int_3 = OpConstant %int 3
+     %Output = OpTypeArray %float %int_3
+%_ptr_Uniform_Output = OpTypePointer Uniform %Output
+ %dataOutput = OpVariable %_ptr_Uniform_Output Uniform
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+               OpReturn
+               OpFunctionEnd
+  )";
+
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateAndRetrieveValidationState());
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Block decoration on a non-struct type"));
+}
+
+TEST_F(ValidateDecorations, BlockDecoratingIntBad) {
+  std::string spirv = R"(
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 430
+               OpDecorate %Output Block
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+     %Output = OpTypeInt 32 1
+%_ptr_Uniform_Output = OpTypePointer Uniform %Output
+ %dataOutput = OpVariable %_ptr_Uniform_Output Uniform
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+               OpReturn
+               OpFunctionEnd
+  )";
+
+  CompileSuccessfully(spirv);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateAndRetrieveValidationState());
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Block decoration on a non-struct type"));
+}
+
 TEST_F(ValidateDecorations, BlockMissingOffsetBad) {
   std::string spirv = R"(
                OpCapability Shader
@@ -4861,9 +4916,8 @@ TEST_F(ValidateDecorations,
   CompileSuccessfully(spirv, SPV_ENV_UNIVERSAL_1_4);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA,
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_4));
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("ConstantNull: expected Execution Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("ConstantNull: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateDecorations,
@@ -6928,6 +6982,72 @@ OpFunctionEnd
       getDiagnosticString(),
       HasSubstr("From Vulkan spec, section 14.5.2:\nSuch variables must be "
                 "identified with a Block or BufferBlock decoration"));
+}
+
+TEST_F(ValidateDecorations, VulkanArrayStrideZero) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %var DescriptorSet 0
+OpDecorate %var Binding 0
+OpDecorate %struct Block
+OpMemberDecorate %struct 0 Offset 0
+OpDecorate %array ArrayStride 0
+%void = OpTypeVoid
+%int = OpTypeInt 32 0
+%int_4 = OpConstant %int 4
+%array = OpTypeArray %int %int_4
+%struct = OpTypeStruct %array
+%ptr_ssbo_struct = OpTypePointer StorageBuffer %struct
+%var = OpVariable %ptr_ssbo_struct StorageBuffer
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(spirv, SPV_ENV_VULKAN_1_1);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_1));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("contains an array with stride 0"));
+}
+
+TEST_F(ValidateDecorations, VulkanArrayStrideTooSmall) {
+  const std::string spirv = R"(
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %var DescriptorSet 0
+OpDecorate %var Binding 0
+OpDecorate %struct Block
+OpMemberDecorate %struct 0 Offset 0
+OpDecorate %inner ArrayStride 4
+OpDecorate %outer ArrayStride 4
+%void = OpTypeVoid
+%int = OpTypeInt 32 0
+%int_4 = OpConstant %int 4
+%inner = OpTypeArray %int %int_4
+%outer = OpTypeArray %inner %int_4
+%struct = OpTypeStruct %outer
+%ptr_ssbo_struct = OpTypePointer StorageBuffer %struct
+%var = OpVariable %ptr_ssbo_struct StorageBuffer
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(spirv, SPV_ENV_VULKAN_1_1);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_1));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "contains an array with stride 4, but with an element size of 16"));
 }
 
 }  // namespace

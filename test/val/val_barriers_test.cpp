@@ -70,6 +70,7 @@ OpCapability Shader
 %subgroup = OpConstant %u32 3
 %invocation = OpConstant %u32 4
 %queuefamily = OpConstant %u32 5
+%shadercall = OpConstant %u32 6
 
 %none = OpConstant %u32 0
 %acquire = OpConstant %u32 2
@@ -120,10 +121,28 @@ OpCapability Int64
       execution_model, memory_model);
 }
 
-std::string GenerateWebGPUShaderCode(
+std::string GenerateWebGPUComputeShaderCode(
     const std::string& body,
     const std::string& capabilities_and_extensions = "",
     const std::string& execution_model = "GLCompute") {
+  const std::string vulkan_memory_capability = R"(
+OpCapability VulkanMemoryModelKHR
+)";
+  const std::string vulkan_memory_extension = R"(
+OpExtension "SPV_KHR_vulkan_memory_model"
+)";
+  const std::string memory_model = "OpMemoryModel Logical VulkanKHR";
+  return GenerateShaderCodeImpl(body,
+                                vulkan_memory_capability +
+                                    capabilities_and_extensions +
+                                    vulkan_memory_extension,
+                                "", execution_model, memory_model);
+}
+
+std::string GenerateWebGPUVertexShaderCode(
+    const std::string& body,
+    const std::string& capabilities_and_extensions = "",
+    const std::string& execution_model = "Vertex") {
   const std::string vulkan_memory_capability = R"(
 OpCapability VulkanMemoryModelKHR
 )";
@@ -257,7 +276,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUAcquireReleaseSuccess) {
 OpControlBarrier %workgroup %workgroup %acquire_release_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_WEBGPU_0));
 }
 
@@ -266,7 +285,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPURelaxedFailure) {
 OpControlBarrier %workgroup %workgroup %workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("For WebGPU, AcquireRelease must be set for Memory "
@@ -278,7 +297,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUMissingWorkgroupFailure) {
 OpControlBarrier %workgroup %workgroup %acquire_release
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("For WebGPU, WorkgroupMemory must be set for Memory "
@@ -290,7 +309,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUUniformFailure) {
 OpControlBarrier %workgroup %workgroup %acquire_release_uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(
       getDiagnosticString(),
@@ -303,7 +322,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUReleaseFailure) {
 OpControlBarrier %workgroup %workgroup %release_uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("For WebGPU, AcquireRelease must be set for Memory "
@@ -341,9 +360,8 @@ OpControlBarrier %f32_1 %device %none
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("ControlBarrier: expected Execution Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("ControlBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpControlBarrierU64ExecutionScope) {
@@ -353,9 +371,8 @@ OpControlBarrier %u64_1 %device %none
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("ControlBarrier: expected Execution Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("ControlBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpControlBarrierFloatMemoryScope) {
@@ -365,9 +382,8 @@ OpControlBarrier %device %f32_1 %none
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("ControlBarrier: expected Memory Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("ControlBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpControlBarrierU64MemoryScope) {
@@ -377,9 +393,8 @@ OpControlBarrier %device %u64_1 %none
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("ControlBarrier: expected Memory Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("ControlBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpControlBarrierFloatMemorySemantics) {
@@ -425,7 +440,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUExecutionScopeDeviceBad) {
 OpControlBarrier %device %workgroup %none
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ControlBarrier: in WebGPU environment Execution Scope "
@@ -437,11 +452,25 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUExecutionScopeSubgroupBad) {
 OpControlBarrier %subgroup %workgroup %none
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ControlBarrier: in WebGPU environment Execution Scope "
                         "is limited to Workgroup"));
+}
+
+TEST_F(ValidateBarriers,
+       OpControlBarrierWebGPUExecutionScopeWorkgroupNonComputeBad) {
+  const std::string body = R"(
+OpControlBarrier %workgroup %workgroup %acquire_release_workgroup
+)";
+
+  CompileSuccessfully(GenerateWebGPUVertexShaderCode(body), SPV_ENV_WEBGPU_0);
+  ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_WEBGPU_0));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "Workgroup Execution Scope is limited to GLCompute execution model"));
 }
 
 TEST_F(ValidateBarriers, OpControlBarrierVulkanMemoryScopeSubgroup) {
@@ -483,7 +512,7 @@ TEST_F(ValidateBarriers, OpControlBarrierWebGPUMemoryScopeNonWorkgroup) {
 OpControlBarrier %workgroup %subgroup %acquire_release_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ControlBarrier: in WebGPU environment Memory Scope is "
@@ -714,7 +743,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUImageMemorySuccess) {
 OpMemoryBarrier %workgroup %image_memory
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_WEBGPU_0));
 }
 
@@ -723,7 +752,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUDeviceFailure) {
 OpMemoryBarrier %subgroup %image_memory
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("in WebGPU environment Memory Scope is limited to "
@@ -735,7 +764,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUAcquireReleaseFailure) {
 OpMemoryBarrier %workgroup %acquire_release_uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ImageMemory must be set for Memory Semantics of "
@@ -747,7 +776,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPURelaxedFailure) {
 OpMemoryBarrier %workgroup %uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ImageMemory must be set for Memory Semantics of "
@@ -759,7 +788,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUAcquireFailure) {
 OpMemoryBarrier %workgroup %acquire_uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ImageMemory must be set for Memory Semantics of "
@@ -771,7 +800,7 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUReleaseFailure) {
 OpMemoryBarrier %workgroup %release_uniform_workgroup
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("ImageMemory must be set for Memory Semantics of "
@@ -783,11 +812,24 @@ TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUUniformFailure) {
 OpMemoryBarrier %workgroup %uniform_image_memory
 )";
 
-  CompileSuccessfully(GenerateWebGPUShaderCode(body), SPV_ENV_WEBGPU_0);
+  CompileSuccessfully(GenerateWebGPUComputeShaderCode(body), SPV_ENV_WEBGPU_0);
   EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_WEBGPU_0));
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("only ImageMemory may be set for Memory Semantics of "
                         "OpMemoryBarrier"));
+}
+
+TEST_F(ValidateBarriers, OpMemoryBarrierWebGPUWorkgroupNonComputeFailure) {
+  const std::string body = R"(
+OpMemoryBarrier %workgroup %image_memory
+)";
+
+  CompileSuccessfully(GenerateWebGPUVertexShaderCode(body), SPV_ENV_WEBGPU_0);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_WEBGPU_0));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "Workgroup Memory Scope is limited to GLCompute execution model"));
 }
 
 TEST_F(ValidateBarriers, OpMemoryBarrierFloatMemoryScope) {
@@ -797,9 +839,8 @@ OpMemoryBarrier %f32_1 %acquire_release_uniform_workgroup
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("MemoryBarrier: expected Memory Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("MemoryBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpMemoryBarrierU64MemoryScope) {
@@ -809,9 +850,8 @@ OpMemoryBarrier %u64_1 %acquire_release_uniform_workgroup
 
   CompileSuccessfully(GenerateShaderCode(body));
   ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions());
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("MemoryBarrier: expected Memory Scope to be a 32-bit int"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("MemoryBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpMemoryBarrierFloatMemorySemantics) {
@@ -993,8 +1033,7 @@ OpMemoryNamedBarrier %barrier %f32_1 %acquire_release_workgroup
             ValidateInstructions(SPV_ENV_UNIVERSAL_1_1));
   EXPECT_THAT(
       getDiagnosticString(),
-      HasSubstr(
-          "MemoryNamedBarrier: expected Memory Scope to be a 32-bit int"));
+      HasSubstr("MemoryNamedBarrier: expected scope to be a 32-bit int"));
 }
 
 TEST_F(ValidateBarriers, OpMemoryNamedBarrierFloatMemorySemantics) {
@@ -1546,6 +1585,79 @@ OpFunctionEnd
   EXPECT_THAT(getDiagnosticString(),
               HasSubstr("Memory Semantics must be a constant instruction when "
                         "CooperativeMatrixNV capability is present"));
+}
+
+TEST_F(ValidateBarriers, OpMemoryBarrierShaderCallRayGenSuccess) {
+  const std::string body =
+      "OpMemoryBarrier %shadercall %release_uniform_workgroup";
+
+  CompileSuccessfully(GenerateShaderCodeImpl(body,
+                                             // capabilities_and_extensions
+                                             R"(
+                                               OpCapability VulkanMemoryModelKHR
+                                               OpCapability RayTracingProvisionalKHR
+                                               OpExtension "SPV_KHR_vulkan_memory_model"
+                                               OpExtension "SPV_KHR_ray_tracing"
+                                             )",
+                                             // definitions
+                                             "",
+                                             // execution_model
+                                             "RayGenerationKHR",
+                                             // memory_model
+                                             "OpMemoryModel Logical VulkanKHR"),
+                      SPV_ENV_VULKAN_1_1);
+
+  ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_VULKAN_1_1));
+}
+
+TEST_F(ValidateBarriers, OpMemoryBarrierShaderCallComputeFailure) {
+  const std::string body =
+      "OpMemoryBarrier %shadercall %release_uniform_workgroup";
+
+  CompileSuccessfully(GenerateShaderCodeImpl(body,
+                                             // capabilities_and_extensions
+                                             R"(
+                                               OpCapability VulkanMemoryModelKHR
+                                               OpExtension "SPV_KHR_vulkan_memory_model"
+                                             )",
+                                             // definitions
+                                             "",
+                                             // execution_model
+                                             "GLCompute",
+                                             // memory_model
+                                             "OpMemoryModel Logical VulkanKHR"),
+                      SPV_ENV_VULKAN_1_1);
+
+  ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_1));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr(
+          "ShaderCallKHR Memory Scope requires a ray tracing execution model"));
+}
+
+TEST_F(ValidateBarriers, OpControlBarrierShaderCallRayGenFailure) {
+  const std::string body = "OpControlBarrier %shadercall %shadercall %none";
+
+  CompileSuccessfully(GenerateShaderCodeImpl(body,
+                                             // capabilities_and_extensions
+                                             R"(
+                                               OpCapability VulkanMemoryModelKHR
+                                               OpCapability RayTracingProvisionalKHR
+                                               OpExtension "SPV_KHR_vulkan_memory_model"
+                                               OpExtension "SPV_KHR_ray_tracing"
+                                             )",
+                                             // definitions
+                                             "",
+                                             // execution_model
+                                             "RayGenerationKHR",
+                                             // memory_model
+                                             "OpMemoryModel Logical VulkanKHR"),
+                      SPV_ENV_VULKAN_1_1);
+
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_1));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("in Vulkan environment Execution Scope is limited to "
+                        "Workgroup and Subgroup"));
 }
 
 }  // namespace
