@@ -38,6 +38,10 @@ const uint32_t kExtInstInstructionInIdx = 1;
 const uint32_t kDebugScopeNumWords = 7;
 const uint32_t kDebugScopeNumWordsWithoutInlinedAt = 6;
 const uint32_t kDebugNoScopeNumWords = 5;
+
+// Number of operands of an OpBranchConditional instruction
+// with weights.
+const uint32_t kOpBranchConditionalWithWeightsNumOperands = 5;
 }  // namespace
 
 Instruction::Instruction(IRContext* c)
@@ -166,12 +170,22 @@ uint32_t Instruction::NumInOperandWords() const {
   return size;
 }
 
+bool Instruction::HasBranchWeights() const {
+  if (opcode_ == SpvOpBranchConditional &&
+      NumOperands() == kOpBranchConditionalWithWeightsNumOperands) {
+    return true;
+  }
+
+  return false;
+}
+
 void Instruction::ToBinaryWithoutAttachedDebugInsts(
     std::vector<uint32_t>* binary) const {
   const uint32_t num_words = 1 + NumOperandWords();
   binary->push_back((num_words << 16) | static_cast<uint16_t>(opcode_));
-  for (const auto& operand : operands_)
+  for (const auto& operand : operands_) {
     binary->insert(binary->end(), operand.words.begin(), operand.words.end());
+  }
 }
 
 void Instruction::ReplaceOperands(const OperandList& new_operands) {
@@ -270,8 +284,7 @@ bool Instruction::IsVulkanStorageImage() const {
 
   // Check if the image is sampled.  If we do not know for sure that it is,
   // then assume it is a storage image.
-  auto s = base_type->GetSingleWordInOperand(kTypeImageSampledIndex);
-  return s != 1;
+  return base_type->GetSingleWordInOperand(kTypeImageSampledIndex) != 1;
 }
 
 bool Instruction::IsVulkanSampledImage() const {
@@ -305,8 +318,7 @@ bool Instruction::IsVulkanSampledImage() const {
 
   // Check if the image is sampled.  If we know for sure that it is,
   // then return true.
-  auto s = base_type->GetSingleWordInOperand(kTypeImageSampledIndex);
-  return s == 1;
+  return base_type->GetSingleWordInOperand(kTypeImageSampledIndex) == 1;
 }
 
 bool Instruction::IsVulkanStorageTexelBuffer() const {
@@ -489,16 +501,16 @@ uint32_t Instruction::GetTypeComponent(uint32_t element) const {
   return subtype;
 }
 
-Instruction* Instruction::InsertBefore(std::unique_ptr<Instruction>&& i) {
-  i.get()->InsertBefore(this);
-  return i.release();
+Instruction* Instruction::InsertBefore(std::unique_ptr<Instruction>&& inst) {
+  inst.get()->InsertBefore(this);
+  return inst.release();
 }
 
 Instruction* Instruction::InsertBefore(
     std::vector<std::unique_ptr<Instruction>>&& list) {
   Instruction* first_node = list.front().get();
-  for (auto& i : list) {
-    i.release()->InsertBefore(this);
+  for (auto& inst : list) {
+    inst.release()->InsertBefore(this);
   }
   list.clear();
   return first_node;
@@ -555,10 +567,13 @@ bool Instruction::IsValidBasePointer() const {
 }
 
 OpenCLDebugInfo100Instructions Instruction::GetOpenCL100DebugOpcode() const {
-  if (opcode() != SpvOpExtInst) return OpenCLDebugInfo100InstructionsMax;
-
-  if (!context()->get_feature_mgr()->GetExtInstImportId_OpenCL100DebugInfo())
+  if (opcode() != SpvOpExtInst) {
     return OpenCLDebugInfo100InstructionsMax;
+  }
+
+  if (!context()->get_feature_mgr()->GetExtInstImportId_OpenCL100DebugInfo()) {
+    return OpenCLDebugInfo100InstructionsMax;
+  }
 
   if (GetSingleWordInOperand(kExtInstSetIdInIdx) !=
       context()->get_feature_mgr()->GetExtInstImportId_OpenCL100DebugInfo()) {
@@ -609,8 +624,21 @@ bool Instruction::IsFoldableByFoldScalar() const {
   if (!folder.IsFoldableOpcode(opcode())) {
     return false;
   }
+
   Instruction* type = context()->get_def_use_mgr()->GetDef(type_id());
-  return folder.IsFoldableType(type);
+  if (!folder.IsFoldableType(type)) {
+    return false;
+  }
+
+  // Even if the type of the instruction is foldable, its operands may not be
+  // foldable (e.g., comparisons of 64bit types).  Check that all operand types
+  // are foldable before accepting the instruction.
+  return WhileEachInOperand([&folder, this](const uint32_t* op_id) {
+    Instruction* def_inst = context()->get_def_use_mgr()->GetDef(*op_id);
+    Instruction* def_inst_type =
+        context()->get_def_use_mgr()->GetDef(def_inst->type_id());
+    return folder.IsFoldableType(def_inst_type);
+  });
 }
 
 bool Instruction::IsFloatingPointFoldingAllowed() const {
@@ -862,6 +890,16 @@ bool Instruction::IsOpcodeSafeToDelete() const {
     default:
       return false;
   }
+}
+
+bool Instruction::IsNonSemanticInstruction() const {
+  if (!HasResultId()) return false;
+  if (opcode() != SpvOpExtInst) return false;
+
+  auto import_inst =
+      context()->get_def_use_mgr()->GetDef(GetSingleWordInOperand(0));
+  std::string import_name = import_inst->GetInOperand(0).AsString();
+  return import_name.find("NonSemantic.") == 0;
 }
 
 void DebugScope::ToBinary(uint32_t type_id, uint32_t result_id,
