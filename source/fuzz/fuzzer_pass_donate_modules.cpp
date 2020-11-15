@@ -65,10 +65,11 @@ void FuzzerPassDonateModules::Apply() {
     std::unique_ptr<opt::IRContext> donor_ir_context = donor_suppliers_.at(
         GetFuzzerContext()->RandomIndex(donor_suppliers_))();
     assert(donor_ir_context != nullptr && "Supplying of donor failed");
-    assert(fuzzerutil::IsValid(
-               donor_ir_context.get(),
-               GetTransformationContext()->GetValidatorOptions()) &&
-           "The donor module must be valid");
+    assert(
+        fuzzerutil::IsValid(donor_ir_context.get(),
+                            GetTransformationContext()->GetValidatorOptions(),
+                            fuzzerutil::kSilentMessageConsumer) &&
+        "The donor module must be valid");
     // Donate the supplied module.
     //
     // Randomly decide whether to make the module livesafe (see
@@ -598,7 +599,7 @@ void FuzzerPassDonateModules::HandleFunctions(
   // Get the ids of functions in the donor module, topologically sorted
   // according to the donor's call graph.
   auto topological_order =
-      GetFunctionsInCallGraphTopologicalOrder(donor_ir_context);
+      CallGraph(donor_ir_context).GetFunctionsInTopologicalOrder();
 
   // Donate the functions in reverse topological order.  This ensures that a
   // function gets donated before any function that depends on it.  This allows
@@ -794,52 +795,6 @@ bool FuzzerPassDonateModules::IsBasicType(
     default:
       return false;
   }
-}
-
-std::vector<uint32_t>
-FuzzerPassDonateModules::GetFunctionsInCallGraphTopologicalOrder(
-    opt::IRContext* context) {
-  CallGraph call_graph(context);
-
-  // This is an implementation of Kahn’s algorithm for topological sorting.
-
-  // This is the sorted order of function ids that we will eventually return.
-  std::vector<uint32_t> result;
-
-  // Get a copy of the initial in-degrees of all functions.  The algorithm
-  // involves decrementing these values, hence why we work on a copy.
-  std::map<uint32_t, uint32_t> function_in_degree =
-      call_graph.GetFunctionInDegree();
-
-  // Populate a queue with all those function ids with in-degree zero.
-  std::queue<uint32_t> queue;
-  for (auto& entry : function_in_degree) {
-    if (entry.second == 0) {
-      queue.push(entry.first);
-    }
-  }
-
-  // Pop ids from the queue, adding them to the sorted order and decreasing the
-  // in-degrees of their successors.  A successor who's in-degree becomes zero
-  // gets added to the queue.
-  while (!queue.empty()) {
-    auto next = queue.front();
-    queue.pop();
-    result.push_back(next);
-    for (auto successor : call_graph.GetDirectCallees(next)) {
-      assert(function_in_degree.at(successor) > 0 &&
-             "The in-degree cannot be zero if the function is a successor.");
-      function_in_degree[successor] = function_in_degree.at(successor) - 1;
-      if (function_in_degree.at(successor) == 0) {
-        queue.push(successor);
-      }
-    }
-  }
-
-  assert(result.size() == function_in_degree.size() &&
-         "Every function should appear in the sort.");
-
-  return result;
 }
 
 void FuzzerPassDonateModules::HandleOpArrayLength(
@@ -1234,23 +1189,19 @@ bool FuzzerPassDonateModules::MaybeAddLivesafeFunction(
     }
   }
 
-  // If the function contains OpKill or OpUnreachable instructions, and has
-  // non-void return type, then we need a value %v to use in order to turn
-  // these into instructions of the form OpReturn %v.
-  uint32_t kill_unreachable_return_value_id;
+  // If |function_to_donate| has non-void return type and contains an
+  // OpKill/OpUnreachable instruction, then a value is needed in order to turn
+  // these into instructions of the form OpReturnValue %value_id.
+  uint32_t kill_unreachable_return_value_id = 0;
   auto function_return_type_inst =
       donor_ir_context->get_def_use_mgr()->GetDef(function_to_donate.type_id());
-  if (function_return_type_inst->opcode() == SpvOpTypeVoid) {
-    // The return type is void, so we don't need a return value.
-    kill_unreachable_return_value_id = 0;
-  } else {
-    // We do need a return value; we use zero.
-    assert(function_return_type_inst->opcode() != SpvOpTypePointer &&
-           "Function return type must not be a pointer.");
+  if (function_return_type_inst->opcode() != SpvOpTypeVoid &&
+      fuzzerutil::FunctionContainsOpKillOrUnreachable(function_to_donate)) {
     kill_unreachable_return_value_id = FindOrCreateZeroConstant(
         original_id_to_donated_id.at(function_return_type_inst->result_id()),
         false);
   }
+
   // Add the function in a livesafe manner.
   ApplyTransformation(TransformationAddFunction(
       donated_instructions, loop_limiter_variable_id, loop_limit, loop_limiters,

@@ -94,6 +94,9 @@ class Function {
   // Returns function's return type id
   inline uint32_t type_id() const { return def_inst_->type_id(); }
 
+  // Returns the function's control mask
+  inline uint32_t control_mask() const { return def_inst_->GetSingleWordInOperand(0); }
+
   // Returns the entry basic block for this function.
   const std::unique_ptr<BasicBlock>& entry() const { return blocks_.front(); }
 
@@ -158,7 +161,10 @@ class Function {
   BasicBlock* InsertBasicBlockBefore(std::unique_ptr<BasicBlock>&& new_block,
                                      BasicBlock* position);
 
-  // Return true if the function calls itself either directly or indirectly.
+  // Returns true if the function has a return block other than the exit block.
+  bool HasEarlyReturn() const;
+
+  // Returns true if the function calls itself either directly or indirectly.
   bool IsRecursive() const;
 
   // Pretty-prints all the basic blocks in this function into a std::string.
@@ -207,6 +213,7 @@ inline void Function::AddBasicBlock(std::unique_ptr<BasicBlock> b) {
 
 inline void Function::AddBasicBlock(std::unique_ptr<BasicBlock> b,
                                     iterator ip) {
+  b->SetParent(this);
   ip.InsertBefore(std::move(b));
 }
 

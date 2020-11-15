@@ -17,7 +17,6 @@
 #ifndef SOURCE_FUZZ_TRANSFORMATION_REPLACE_CONSTANT_WITH_UNIFORM_H_
 #define SOURCE_FUZZ_TRANSFORMATION_REPLACE_CONSTANT_WITH_UNIFORM_H_
 
-#include "source/fuzz/fact_manager.h"
 #include "source/fuzz/id_use_descriptor.h"
 #include "source/fuzz/protobufs/spirvfuzz_protobufs.h"
 #include "source/fuzz/transformation.h"
@@ -71,6 +70,8 @@ class TransformationReplaceConstantWithUniform : public Transformation {
   //   |message_.fresh_id_for_load|
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
+
+  std::unordered_set<uint32_t> GetFreshIds() const override;
 
   protobufs::Transformation ToMessage() const override;
 

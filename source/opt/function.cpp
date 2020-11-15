@@ -42,7 +42,6 @@ Function* Function::Clone(IRContext* ctx) const {
   clone->blocks_.reserve(blocks_.size());
   for (const auto& b : blocks_) {
     std::unique_ptr<BasicBlock> bb(b->Clone(ctx));
-    bb->SetParent(clone);
     clone->AddBasicBlock(std::move(bb));
   }
 
@@ -225,6 +224,18 @@ BasicBlock* Function::InsertBasicBlockBefore(
   }
   assert(false && "Could not find insertion point.");
   return nullptr;
+}
+
+bool Function::HasEarlyReturn() const {
+  auto post_dominator_analysis =
+      blocks_.front()->GetLabel()->context()->GetPostDominatorAnalysis(this);
+  for (auto& block : blocks_) {
+    if (spvOpcodeIsReturn(block->tail()->opcode()) &&
+        !post_dominator_analysis->Dominates(block.get(), entry().get())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Function::IsRecursive() const {

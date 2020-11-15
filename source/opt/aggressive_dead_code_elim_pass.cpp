@@ -533,6 +533,17 @@ bool AggressiveDCEPass::AggressiveDCE(Function* func) {
       AddToWorklist(dec);
     }
 
+    // Add DebugScope and DebugInlinedAt for |liveInst| to the work list.
+    if (liveInst->GetDebugScope().GetLexicalScope() != kNoDebugScope) {
+      auto* scope = get_def_use_mgr()->GetDef(
+          liveInst->GetDebugScope().GetLexicalScope());
+      AddToWorklist(scope);
+    }
+    if (liveInst->GetDebugInlinedAt() != kNoInlinedAt) {
+      auto* inlined_at =
+          get_def_use_mgr()->GetDef(liveInst->GetDebugInlinedAt());
+      AddToWorklist(inlined_at);
+    }
     worklist_.pop();
   }
 
@@ -945,6 +956,7 @@ void AggressiveDCEPass::InitExtensions() {
       "SPV_AMD_gpu_shader_half_float",
       "SPV_KHR_shader_draw_parameters",
       "SPV_KHR_subgroup_vote",
+      "SPV_KHR_8bit_storage",
       "SPV_KHR_16bit_storage",
       "SPV_KHR_device_group",
       "SPV_KHR_multiview",

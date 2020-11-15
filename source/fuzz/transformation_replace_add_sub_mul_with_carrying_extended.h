@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SPIRV_TOOLS_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H
-#define SPIRV_TOOLS_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H
+#ifndef SOURCE_FUZZ_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H_
+#define SOURCE_FUZZ_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H_
 
 #include "source/fuzz/protobufs/spirvfuzz_protobufs.h"
 #include "source/fuzz/transformation.h"
@@ -52,6 +52,8 @@ class TransformationReplaceAddSubMulWithCarryingExtended
   void Apply(opt::IRContext* ir_context,
              TransformationContext* transformation_context) const override;
 
+  std::unordered_set<uint32_t> GetFreshIds() const override;
+
   protobufs::Transformation ToMessage() const override;
 
   // Checks if an OpIAdd, OpISub or OpIMul instruction can be used by the
@@ -66,4 +68,4 @@ class TransformationReplaceAddSubMulWithCarryingExtended
 }  // namespace fuzz
 }  // namespace spvtools
 
-#endif  // SPIRV_TOOLS_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H
+#endif  // SOURCE_FUZZ_TRANSFORMATION_REPLACE_ADD_SUB_MUL_WITH_CARRYING_EXTENDED_H_
