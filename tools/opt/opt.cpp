@@ -490,6 +490,10 @@ Options (in lexicographical order):)",
                avoid triggering those bugs.
                Current workarounds: Avoid OpUnreachable in loops.)");
   printf(R"(
+  --workgroup-scalar-block-layout
+               Forwards this option to the validator.  See the validator help
+               for details.)");
+  printf(R"(
   --wrap-opkill
                Replaces all OpKill instructions in functions that can be called
                from a continue construct with a function call to a function
@@ -741,6 +745,8 @@ OptStatus ParseFlags(int argc, const char** argv,
         validator_options->SetRelaxBlockLayout(true);
       } else if (0 == strcmp(cur_arg, "--scalar-block-layout")) {
         validator_options->SetScalarBlockLayout(true);
+      } else if (0 == strcmp(cur_arg, "--workgroup-scalar-block-layout")) {
+        validator_options->SetWorkgroupScalarBlockLayout(true);
       } else if (0 == strcmp(cur_arg, "--skip-block-layout")) {
         validator_options->SetSkipBlockLayout(true);
       } else if (0 == strcmp(cur_arg, "--relax-struct-store")) {
@@ -801,7 +807,7 @@ int main(int argc, const char** argv) {
   }
 
   std::vector<uint32_t> binary;
-  if (!ReadFile<uint32_t>(in_file, "rb", &binary)) {
+  if (!ReadBinaryFile<uint32_t>(in_file, &binary)) {
     return 1;
   }
 

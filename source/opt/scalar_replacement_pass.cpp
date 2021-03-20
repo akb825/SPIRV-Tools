@@ -175,7 +175,8 @@ bool ScalarReplacementPass::ReplaceWholeDebugDeclare(
     Instruction* added_dbg_value =
         context()->get_debug_info_mgr()->AddDebugValueForDecl(
             dbg_decl, /*value_id=*/var->result_id(),
-            /*insert_before=*/var->NextNode());
+            /*insert_before=*/var->NextNode(), /*scope_and_line=*/dbg_decl);
+
     if (added_dbg_value == nullptr) return false;
     added_dbg_value->AddOperand(
         {SPV_OPERAND_TYPE_ID,
@@ -860,6 +861,9 @@ bool ScalarReplacementPass::CheckUsesRelaxed(const Instruction* inst) const {
           case SpvOpStore:
             if (!CheckStore(user, index)) ok = false;
             break;
+          case SpvOpImageTexelPointer:
+            if (!CheckImageTexelPointer(index)) ok = false;
+            break;
           default:
             ok = false;
             break;
@@ -867,6 +871,10 @@ bool ScalarReplacementPass::CheckUsesRelaxed(const Instruction* inst) const {
       });
 
   return ok;
+}
+
+bool ScalarReplacementPass::CheckImageTexelPointer(uint32_t index) const {
+  return index == 2u;
 }
 
 bool ScalarReplacementPass::CheckLoad(const Instruction* inst,

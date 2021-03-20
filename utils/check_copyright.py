@@ -36,10 +36,11 @@ AUTHORS = ['The Khronos Group Inc.',
            'André Perez Maselco',
            'Vasyl Teliman',
            'Advanced Micro Devices, Inc.',
-           'Stefano Milizia']
+           'Stefano Milizia',
+           'Alastair F. Donaldson']
 CURRENT_YEAR='2020'
 
-YEARS = '(2014-2016|2015-2016|2015-2020|2016|2016-2017|2017|2017-2019|2018|2019|2020)'
+YEARS = '(2014-2016|2015-2016|2015-2020|2016|2016-2017|2017|2017-2019|2018|2019|2020|2021)'
 COPYRIGHT_RE = re.compile(
         'Copyright \(c\) {} ({})'.format(YEARS, '|'.join(AUTHORS)))
 

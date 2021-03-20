@@ -260,6 +260,11 @@ typedef enum spv_operand_type_t {
   SPV_OPERAND_TYPE_CLDEBUG100_DEBUG_OPERATION,                     // Sec 3.6
   SPV_OPERAND_TYPE_CLDEBUG100_DEBUG_IMPORTED_ENTITY,               // Sec 3.7
 
+  // The following are concrete enum types from SPV_INTEL_float_controls2
+  // https://github.com/intel/llvm/blob/39fa9b0cbfbae88327118990a05c5b387b56d2ef/sycl/doc/extensions/SPIRV/SPV_INTEL_float_controls2.asciidoc
+  SPV_OPERAND_TYPE_FPDENORM_MODE,     // Sec 3.17 FP Denorm Mode
+  SPV_OPERAND_TYPE_FPOPERATION_MODE,  // Sec 3.18 FP Operation Mode
+
   // This is a sentinel value, and does not represent an operand type.
   // It should come last.
   SPV_OPERAND_TYPE_NUM_OPERAND_TYPES,
@@ -620,6 +625,12 @@ SPIRV_TOOLS_EXPORT void spvValidatorOptionsSetUniformBufferStandardLayout(
 SPIRV_TOOLS_EXPORT void spvValidatorOptionsSetScalarBlockLayout(
     spv_validator_options options, bool val);
 
+// Records whether the validator should use "scalar" block layout
+// rules (as defined above) for Workgroup blocks.  See Vulkan
+// extension VK_KHR_workgroup_memory_explicit_layout.
+SPIRV_TOOLS_EXPORT void spvValidatorOptionsSetWorkgroupScalarBlockLayout(
+    spv_validator_options options, bool val);
+
 // Records whether or not the validator should skip validating standard
 // uniform/storage block layout.
 SPIRV_TOOLS_EXPORT void spvValidatorOptionsSetSkipBlockLayout(
@@ -660,7 +671,7 @@ SPIRV_TOOLS_EXPORT void spvOptimizerOptionsSetPreserveSpecConstants(
 // Creates a reducer options object with default options. Returns a valid
 // options object. The object remains valid until it is passed into
 // |spvReducerOptionsDestroy|.
-SPIRV_TOOLS_EXPORT spv_reducer_options spvReducerOptionsCreate();
+SPIRV_TOOLS_EXPORT spv_reducer_options spvReducerOptionsCreate(void);
 
 // Destroys the given reducer options object.
 SPIRV_TOOLS_EXPORT void spvReducerOptionsDestroy(spv_reducer_options options);
@@ -687,7 +698,7 @@ SPIRV_TOOLS_EXPORT void spvReducerOptionsSetTargetFunction(
 // Creates a fuzzer options object with default options. Returns a valid
 // options object. The object remains valid until it is passed into
 // |spvFuzzerOptionsDestroy|.
-SPIRV_TOOLS_EXPORT spv_fuzzer_options spvFuzzerOptionsCreate();
+SPIRV_TOOLS_EXPORT spv_fuzzer_options spvFuzzerOptionsCreate(void);
 
 // Destroys the given fuzzer options object.
 SPIRV_TOOLS_EXPORT void spvFuzzerOptionsDestroy(spv_fuzzer_options options);
