@@ -837,9 +837,10 @@ void AddVariableIdToEntryPointInterfaces(opt::IRContext* context, uint32_t id) {
   }
 }
 
-void AddGlobalVariable(opt::IRContext* context, uint32_t result_id,
-                       uint32_t type_id, SpvStorageClass storage_class,
-                       uint32_t initializer_id) {
+opt::Instruction* AddGlobalVariable(opt::IRContext* context, uint32_t result_id,
+                                    uint32_t type_id,
+                                    SpvStorageClass storage_class,
+                                    uint32_t initializer_id) {
   // Check various preconditions.
   assert(result_id != 0 && "Result id can't be 0");
 
@@ -874,16 +875,20 @@ void AddGlobalVariable(opt::IRContext* context, uint32_t result_id,
     operands.push_back({SPV_OPERAND_TYPE_ID, {initializer_id}});
   }
 
-  context->module()->AddGlobalValue(MakeUnique<opt::Instruction>(
-      context, SpvOpVariable, type_id, result_id, std::move(operands)));
+  auto new_instruction = MakeUnique<opt::Instruction>(
+      context, SpvOpVariable, type_id, result_id, std::move(operands));
+  auto result = new_instruction.get();
+  context->module()->AddGlobalValue(std::move(new_instruction));
 
   AddVariableIdToEntryPointInterfaces(context, result_id);
   UpdateModuleIdBound(context, result_id);
+
+  return result;
 }
 
-void AddLocalVariable(opt::IRContext* context, uint32_t result_id,
-                      uint32_t type_id, uint32_t function_id,
-                      uint32_t initializer_id) {
+opt::Instruction* AddLocalVariable(opt::IRContext* context, uint32_t result_id,
+                                   uint32_t type_id, uint32_t function_id,
+                                   uint32_t initializer_id) {
   // Check various preconditions.
   assert(result_id != 0 && "Result id can't be 0");
 
@@ -904,13 +909,17 @@ void AddLocalVariable(opt::IRContext* context, uint32_t result_id,
   auto* function = FindFunction(context, function_id);
   assert(function && "Function id is invalid");
 
-  function->begin()->begin()->InsertBefore(MakeUnique<opt::Instruction>(
+  auto new_instruction = MakeUnique<opt::Instruction>(
       context, SpvOpVariable, type_id, result_id,
       opt::Instruction::OperandList{
           {SPV_OPERAND_TYPE_STORAGE_CLASS, {SpvStorageClassFunction}},
-          {SPV_OPERAND_TYPE_ID, {initializer_id}}}));
+          {SPV_OPERAND_TYPE_ID, {initializer_id}}});
+  auto result = new_instruction.get();
+  function->begin()->begin()->InsertBefore(std::move(new_instruction));
 
   UpdateModuleIdBound(context, result_id);
+
+  return result;
 }
 
 bool HasDuplicates(const std::vector<uint32_t>& arr) {
@@ -1914,6 +1923,15 @@ bool NewTerminatorPreservesDominationRules(opt::IRContext* ir_context,
   }
 
   return true;
+}
+
+opt::Module::iterator GetFunctionIterator(opt::IRContext* ir_context,
+                                          uint32_t function_id) {
+  return std::find_if(ir_context->module()->begin(),
+                      ir_context->module()->end(),
+                      [function_id](const opt::Function& f) {
+                        return f.result_id() == function_id;
+                      });
 }
 
 }  // namespace fuzzerutil
