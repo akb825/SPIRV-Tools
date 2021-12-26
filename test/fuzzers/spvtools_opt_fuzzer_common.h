@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Google LLC.
+// Copyright (c) 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "gtest/gtest.h"
+#ifndef TEST_FUZZERS_SPVTOOLS_OPT_FUZZER_COMMON_H_
+#define TEST_FUZZERS_SPVTOOLS_OPT_FUZZER_COMMON_H_
+
+#include <cinttypes>
+#include <cstddef>
+#include <functional>
+
+#include "spirv-tools/optimizer.hpp"
 
 namespace spvtools {
-namespace lint {
-namespace {
+namespace fuzzers {
 
-TEST(PlaceholderTest, PlaceholderTest) { ASSERT_TRUE(true); }
+// Helper function capturing the common logic for the various optimizer fuzzers.
+int OptFuzzerTestOneInput(
+    const uint8_t* data, size_t size,
+    std::function<void(spvtools::Optimizer&)> register_passes);
 
-}  // namespace
-}  // namespace lint
+}  // namespace fuzzers
 }  // namespace spvtools
+
+#endif  // TEST_FUZZERS_SPVTOOLS_OPT_FUZZER_COMMON_H_

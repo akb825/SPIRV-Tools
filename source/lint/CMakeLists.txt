@@ -12,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 set(SPIRV_TOOLS_LINT_SOURCES
+  divergence_analysis.h
+  lints.h
+
   linter.cpp
+  divergence_analysis.cpp
+  lint_divergent_derivatives.cpp
 )
 
 if(MSVC AND (NOT ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")))
   # Enable parallel builds across four cores for this lib.
   add_definitions(/MP4)
 endif()
-
-spvtools_pch(SPIRV_TOOLS_LINT_SOURCES pch_source_lint)
 
 add_library(SPIRV-Tools-lint ${SPIRV_TOOLS_LIBRARY_TYPE} ${SPIRV_TOOLS_LINT_SOURCES})
 
