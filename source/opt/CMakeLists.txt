@@ -243,7 +243,8 @@ endif()
 
 spvtools_pch(SPIRV_TOOLS_OPT_SOURCES pch_source_opt)
 
-add_library(SPIRV-Tools-opt ${SPIRV_TOOLS_LIBRARY_TYPE} ${SPIRV_TOOLS_OPT_SOURCES})
+# ModularShaderLanguage: Only build static for our use case.
+add_library(SPIRV-Tools-opt STATIC ${SPIRV_TOOLS_OPT_SOURCES})
 
 spvtools_default_compile_options(SPIRV-Tools-opt)
 target_include_directories(SPIRV-Tools-opt

@@ -372,7 +372,7 @@ function(spirv_tools_default_target_options target)
   add_dependencies(${target} spirv-tools-build-version core_tables enum_string_mapping extinst_tables)
 endfunction()
 
-# Don't take upstream logic for bulding shared and optionally static.
+# ModularShaderLanguage: Don't take upstream logic for bulding shared and optionally static.
 if (0)
 
 # Always build ${SPIRV_TOOLS}-shared. This is expected distro packages, and
@@ -407,7 +407,7 @@ else()
 endif()
 
 else()
-	# Only build static for our use case.
+  # ModularShaderLanguage: Only build static for our use case.
   add_library(${SPIRV_TOOLS}-static STATIC ${SPIRV_SOURCES})
   spirv_tools_default_target_options(${SPIRV_TOOLS}-static)
   # The static target does not have the '-static' suffix.
