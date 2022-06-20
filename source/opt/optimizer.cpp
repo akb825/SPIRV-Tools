@@ -324,6 +324,8 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
     RegisterPass(CreateLocalAccessChainConvertPass());
   } else if (pass_name == "replace-desc-array-access-using-var-index") {
     RegisterPass(CreateReplaceDescArrayAccessUsingVarIndexPass());
+  } else if (pass_name == "spread-volatile-semantics") {
+    RegisterPass(CreateSpreadVolatileSemanticsPass());
   } else if (pass_name == "descriptor-scalar-replacement") {
     RegisterPass(CreateDescriptorScalarReplacementPass());
   } else if (pass_name == "eliminate-dead-code-aggressive") {
@@ -519,6 +521,10 @@ bool Optimizer::RegisterPassFromFlag(const std::string& flag) {
     RegisterPass(CreateAmdExtToKhrPass());
   } else if (pass_name == "interpolate-fixup") {
     RegisterPass(CreateInterpolateFixupPass());
+  } else if (pass_name == "remove-dont-inline") {
+    RegisterPass(CreateRemoveDontInlinePass());
+  } else if (pass_name == "eliminate-dead-input-components") {
+    RegisterPass(CreateEliminateDeadInputComponentsPass());
   } else if (pass_name == "convert-to-sampled-image") {
     if (pass_args.size() > 0) {
       auto descriptor_set_binding_pairs =
@@ -976,6 +982,11 @@ Optimizer::PassToken CreateReplaceDescArrayAccessUsingVarIndexPass() {
       MakeUnique<opt::ReplaceDescArrayAccessUsingVarIndex>());
 }
 
+Optimizer::PassToken CreateSpreadVolatileSemanticsPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::SpreadVolatileSemantics>());
+}
+
 Optimizer::PassToken CreateDescriptorScalarReplacementPass() {
   return MakeUnique<Optimizer::PassToken::Impl>(
       MakeUnique<opt::DescriptorScalarReplacement>());
@@ -995,6 +1006,11 @@ Optimizer::PassToken CreateInterpolateFixupPass() {
       MakeUnique<opt::InterpFixupPass>());
 }
 
+Optimizer::PassToken CreateEliminateDeadInputComponentsPass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::EliminateDeadInputComponentsPass>());
+}
+
 Optimizer::PassToken CreateConvertToSampledImagePass(
     const std::vector<opt::DescriptorSetAndBinding>&
         descriptor_set_binding_pairs) {
@@ -1002,4 +1018,8 @@ Optimizer::PassToken CreateConvertToSampledImagePass(
       MakeUnique<opt::ConvertToSampledImagePass>(descriptor_set_binding_pairs));
 }
 
+Optimizer::PassToken CreateRemoveDontInlinePass() {
+  return MakeUnique<Optimizer::PassToken::Impl>(
+      MakeUnique<opt::RemoveDontInline>());
+}
 }  // namespace spvtools
