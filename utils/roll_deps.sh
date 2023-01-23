@@ -27,7 +27,7 @@ googletest_trunk="origin/main"
 re2_dir="external/re2/"
 re2_trunk="origin/main"
 spirv_headers_dir="external/spirv-headers/"
-spirv_headers_trunk="origin/master"
+spirv_headers_trunk="origin/main"
 
 # This script assumes it's parent directory is the repo root.
 repo_path=$(dirname "$0")/..
@@ -38,6 +38,8 @@ if [[ $(git diff --stat) != '' ]]; then
     echo "Working tree is dirty, commit changes before attempting to roll DEPS"
     exit 1
 fi
+
+echo "*** Ignore messages about running 'git cl upload' ***"
 
 old_head=$(git rev-parse HEAD)
 
