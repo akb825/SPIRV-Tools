@@ -14,7 +14,6 @@
 
 #include "source/opt/folding_rules.h"
 
-#include <climits>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -2885,8 +2884,12 @@ FoldingRule UpdateImageOperands() {
                "Offset and ConstOffset may not be used together");
         if (offset_operand_index < inst->NumOperands()) {
           if (constants[offset_operand_index]) {
-            image_operands =
-                image_operands | uint32_t(spv::ImageOperandsMask::ConstOffset);
+            if (constants[offset_operand_index]->IsZero()) {
+              inst->RemoveInOperand(offset_operand_index);
+            } else {
+              image_operands = image_operands |
+                               uint32_t(spv::ImageOperandsMask::ConstOffset);
+            }
             image_operands =
                 image_operands & ~uint32_t(spv::ImageOperandsMask::Offset);
             inst->SetInOperand(operand_index, {image_operands});
