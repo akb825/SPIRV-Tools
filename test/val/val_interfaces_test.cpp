@@ -419,9 +419,10 @@ OpFunctionEnd
 )";
 
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_0);
-  EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_0));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Variable has conflicting location decorations"));
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_0));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("decorated with Location multiple times is not allowed"));
 }
 
 TEST_F(ValidateInterfacesTest, VulkanLocationsVariableAndMemberAssigned) {
@@ -505,9 +506,10 @@ OpFunctionEnd
 )";
 
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_0);
-  EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_0));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Member index 1 has conflicting location assignments"));
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_0));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("decorated with Location multiple times is not allowed"));
 }
 
 TEST_F(ValidateInterfacesTest, VulkanLocationsMissingAssignmentStructMember) {
@@ -619,6 +621,72 @@ OpFunctionEnd
       getDiagnosticString(),
       HasSubstr("Entry-point has conflicting output location assignment "
                 "at location 1"));
+}
+
+TEST_F(ValidateInterfacesTest, VulkanPatchAndNonPatchOverlap) {
+  const std::string text = R"(
+               OpCapability Tessellation
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint TessellationControl %main "main" %a %b
+               OpExecutionMode %main OutputVertices 4
+               OpDecorate %a Location 0
+               OpDecorate %b Patch
+               OpDecorate %b Location 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+     %uint_4 = OpConstant %uint 4
+%_arr_float_uint_4 = OpTypeArray %float %uint_4
+%_ptr_Output__arr_float_uint_4 = OpTypePointer Output %_arr_float_uint_4
+          %a = OpVariable %_ptr_Output__arr_float_uint_4 Output
+%_ptr_Output_float = OpTypePointer Output %float
+          %b = OpVariable %_ptr_Output_float Output
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+               OpReturn
+               OpFunctionEnd
+    )";
+
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_2);
+  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_VULKAN_1_2));
+}
+
+TEST_F(ValidateInterfacesTest, VulkanPatchOverlap) {
+  const std::string text = R"(
+               OpCapability Tessellation
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint TessellationControl %main "main" %a %b %c
+               OpExecutionMode %main OutputVertices 4
+               OpDecorate %a Location 0
+               OpDecorate %b Patch
+               OpDecorate %b Location 6
+               OpDecorate %c Patch
+               OpDecorate %c Location 6
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+     %uint_4 = OpConstant %uint 4
+%_arr_float_uint_4 = OpTypeArray %float %uint_4
+%_ptr_Output__arr_float_uint_4 = OpTypePointer Output %_arr_float_uint_4
+          %a = OpVariable %_ptr_Output__arr_float_uint_4 Output
+%_ptr_Output_float = OpTypePointer Output %float
+          %b = OpVariable %_ptr_Output_float Output
+          %c = OpVariable %_ptr_Output_float Output
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+               OpReturn
+               OpFunctionEnd
+    )";
+
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_2);
+  EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_2));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-OpEntryPoint-08722"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Entry-point has conflicting output location "
+                        "assignment at location 6, component 0"));
 }
 
 TEST_F(ValidateInterfacesTest,
@@ -1157,9 +1225,10 @@ OpFunctionEnd
 )";
 
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_0);
-  EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_0));
-  EXPECT_THAT(getDiagnosticString(),
-              HasSubstr("Variable has conflicting component decorations"));
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_0));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("decorated with Component multiple times is not allowed"));
 }
 
 TEST_F(ValidateInterfacesTest,
@@ -1186,10 +1255,10 @@ OpFunctionEnd
 )";
 
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_0);
-  EXPECT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(SPV_ENV_VULKAN_1_0));
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_0));
   EXPECT_THAT(
       getDiagnosticString(),
-      HasSubstr("Member index 0 has conflicting component assignments"));
+      HasSubstr("decorated with Component multiple times is not allowed"));
 }
 
 TEST_F(ValidateInterfacesTest, VulkanLocationsVariableConflictOutputIndex1) {

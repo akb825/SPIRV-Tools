@@ -786,6 +786,21 @@ TEST_F(ValidateImage, TypeImageWrongArrayForSubpassDataVulkan) {
               HasSubstr("Dim SubpassData requires Arrayed to be 0"));
 }
 
+TEST_F(ValidateImage, TypeImageDimRectVulkan) {
+  const std::string code = GetShaderHeader("OpCapability InputAttachment\n") +
+                           R"(
+%img_type = OpTypeImage %f32 Rect 0 1 0 2 Unknown
+)" + TrivialMain();
+
+  CompileSuccessfully(code.c_str());
+  ASSERT_EQ(SPV_ERROR_INVALID_CAPABILITY,
+            ValidateInstructions(SPV_ENV_VULKAN_1_0));
+  // Can't actually hit VUID-StandaloneSpirv-OpTypeImage-09638
+  EXPECT_THAT(
+      getDiagnosticString(),
+      AnyVUID("TypeImage requires one of these capabilities: SampledRect"));
+}
+
 TEST_F(ValidateImage, TypeImageWrongSampledTypeForTileImageDataEXT) {
   const std::string code = GetShaderHeader(
                                "OpCapability TileImageColorReadAccessEXT\n"
@@ -4436,7 +4451,7 @@ TEST_F(ValidateImage, QuerySizeNotImage) {
   const std::string body = R"(
 %img = OpLoad %type_image_f32_2d_0011 %uniform_image_f32_2d_0011
 %sampler = OpLoad %type_sampler %uniform_sampler
-%simg = OpSampledImage %type_sampled_image_f32_2d_0001 %img %sampler
+%simg = OpSampledImage %type_sampled_image_f32_2d_0011 %img %sampler
 %res1 = OpImageQuerySize %u32vec2 %sampler
 )";
 
@@ -4450,7 +4465,7 @@ TEST_F(ValidateImage, QuerySizeSampledImageDirectly) {
   const std::string body = R"(
 %img = OpLoad %type_image_f32_2d_0011 %uniform_image_f32_2d_0011
 %sampler = OpLoad %type_sampler %uniform_sampler
-%simg = OpSampledImage %type_sampled_image_f32_2d_0001 %img %sampler
+%simg = OpSampledImage %type_sampled_image_f32_2d_0011 %img %sampler
 %res1 = OpImageQuerySize %u32vec2 %simg
 )";
 
@@ -8317,9 +8332,9 @@ TEST_F(ValidateImage, QCOMImageProcessing2BlockMatchWindowSADNoDecorRefNIT) {
            OpDecorate %4 DescriptorSet 0
            OpDecorate %4 Binding 1
            OpDecorate %4 BlockMatchTextureQCOM
-           OpDecorate %4 BlockMatchSamplerQCOM
            OpDecorate %5 DescriptorSet 0
            OpDecorate %5 Binding 3
+           OpDecorate %5 BlockMatchSamplerQCOM
            OpDecorate %6 DescriptorSet 0
            OpDecorate %6 Binding 2
            OpDecorate %6 BlockMatchSamplerQCOM
@@ -8801,9 +8816,9 @@ TEST_F(ValidateImage, QCOMImageProcessing2BlockMatchWindowSSDNoDecorRefNIT) {
            OpDecorate %4 DescriptorSet 0
            OpDecorate %4 Binding 1
            OpDecorate %4 BlockMatchTextureQCOM
-           OpDecorate %4 BlockMatchSamplerQCOM
            OpDecorate %5 DescriptorSet 0
            OpDecorate %5 Binding 3
+           OpDecorate %5 BlockMatchSamplerQCOM
            OpDecorate %6 DescriptorSet 0
            OpDecorate %6 Binding 2
            OpDecorate %6 BlockMatchSamplerQCOM
@@ -9542,9 +9557,8 @@ TEST_F(ValidateImage,
                OpDecorate %104 DescriptorSet 0
                OpDecorate %104 Binding 2
                OpDecorate %102 BlockMatchTextureQCOM
-               OpDecorate %102 BlockMatchSamplerQCOM
+               OpDecorate %103 BlockMatchSamplerQCOM
                OpDecorate %104 BlockMatchTextureQCOM
-               OpDecorate %104 BlockMatchSamplerQCOM
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
        %uint = OpTypeInt 32 0
@@ -9617,9 +9631,8 @@ TEST_F(ValidateImage, QCOMImageProcessing2BlockMatchWindowSADInvalidUseRefNI) {
                OpDecorate %104 DescriptorSet 0
                OpDecorate %104 Binding 2
                OpDecorate %102 BlockMatchTextureQCOM
-               OpDecorate %102 BlockMatchSamplerQCOM
+               OpDecorate %103 BlockMatchSamplerQCOM
                OpDecorate %104 BlockMatchTextureQCOM
-               OpDecorate %104 BlockMatchSamplerQCOM
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
        %uint = OpTypeInt 32 0
@@ -9832,9 +9845,8 @@ TEST_F(ValidateImage,
                OpDecorate %104 DescriptorSet 0
                OpDecorate %104 Binding 2
                OpDecorate %102 BlockMatchTextureQCOM
-               OpDecorate %102 BlockMatchSamplerQCOM
+               OpDecorate %103 BlockMatchSamplerQCOM
                OpDecorate %104 BlockMatchTextureQCOM
-               OpDecorate %104 BlockMatchSamplerQCOM
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
        %uint = OpTypeInt 32 0
@@ -9907,9 +9919,8 @@ TEST_F(ValidateImage, QCOMImageProcessing2BlockMatchWindowSSDInvalidUseRefNI) {
                OpDecorate %104 DescriptorSet 0
                OpDecorate %104 Binding 2
                OpDecorate %102 BlockMatchTextureQCOM
-               OpDecorate %102 BlockMatchSamplerQCOM
+               OpDecorate %103 BlockMatchSamplerQCOM
                OpDecorate %104 BlockMatchTextureQCOM
-               OpDecorate %104 BlockMatchSamplerQCOM
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
        %uint = OpTypeInt 32 0
@@ -10634,6 +10645,44 @@ TEST_F(ValidateImage, ImageMSArray_ArrayedTypeDoesNotRequireCapability) {
   CompileSuccessfully(code, env);
   ASSERT_EQ(SPV_SUCCESS, ValidateInstructions(env));
   EXPECT_THAT(getDiagnosticString(), Eq(""));
+}
+
+TEST_F(ValidateImage, SampledImageTypeMismatch) {
+  const std::string code = R"(
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %im_var DescriptorSet 0
+OpDecorate %im_var Binding 0
+OpDecorate %s_var DescriptorSet 1
+OpDecorate %s_var Binding 0
+%void = OpTypeVoid
+%float = OpTypeFloat 32
+%im1_ty = OpTypeImage %float 2D 0 0 0 1 Unknown
+%im2_ty = OpTypeImage %float 2D 1 0 0 1 Unknown
+%s_ty = OpTypeSampler
+%s_im_ty = OpTypeSampledImage %im2_ty
+%ptr_im = OpTypePointer UniformConstant %im1_ty
+%ptr_s = OpTypePointer UniformConstant %s_ty
+%im_var = OpVariable %ptr_im UniformConstant
+%s_var = OpVariable %ptr_s UniformConstant
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+%im_ld = OpLoad %im1_ty %im_var
+%s_ld = OpLoad %s_ty %s_var
+%sampled_image = OpSampledImage %s_im_ty %im_ld %s_ld
+OpReturn
+OpFunctionEnd
+)";
+
+  const spv_target_env env = SPV_ENV_VULKAN_1_0;
+  CompileSuccessfully(code, env);
+  ASSERT_EQ(SPV_ERROR_INVALID_DATA, ValidateInstructions(env));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("Expected Image to have the same type as Result Type Image"));
 }
 
 }  // namespace
