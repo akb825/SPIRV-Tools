@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gtest/gtest-param-test.h>
+#include <gtest/gtest.h>
+
+#include <tuple>
+
 #include "spirv-tools/optimizer.hpp"
 #include "test/opt/pass_fixture.h"
 #include "test/opt/pass_utils.h"
@@ -63,8 +68,8 @@ TEST_F(TrimCapabilitiesPassTest, CheckKnownAliasTransformations) {
                OpCapability DotProductInput4x8BitKHR
                OpCapability DotProductInput4x8BitPackedKHR
                OpCapability DotProductKHR
-               OpCapability ComputeDerivativeGroupQuadsNV
-               OpCapability ComputeDerivativeGroupLinearNV
+               OpCapability ComputeDerivativeGroupQuadsKHR
+               OpCapability ComputeDerivativeGroupLinearKHR
 ; CHECK: OpCapability Linkage
 ; CHECK-NOT: OpCapability StorageUniform16
 ; CHECK-NOT: OpCapability StorageUniformBufferBlock16
@@ -91,8 +96,8 @@ TEST_F(TrimCapabilitiesPassTest, CheckKnownAliasTransformations) {
 ; CHECK-NOT: OpCapability DotProductInput4x8BitKHR
 ; CHECK-NOT: OpCapability DotProductInput4x8BitPackedKHR
 ; CHECK-NOT: OpCapability DotProductKHR
-; CHECK-NOT: OpCapability ComputeDerivativeGroupQuadsNV
-; CHECK-NOT: OpCapability ComputeDerivativeGroupLinearNV
+; CHECK-NOT: OpCapability ComputeDerivativeGroupQuadsKHR
+; CHECK-NOT: OpCapability ComputeDerivativeGroupLinearKHR
 ; CHECK: OpCapability UniformAndStorageBuffer16BitAccess
 ; CHECK: OpCapability StorageBuffer16BitAccess
 ; CHECK: OpCapability ShaderViewportIndexLayerEXT
@@ -2136,11 +2141,11 @@ TEST_F(TrimCapabilitiesPassTest, Float64_RemainsWhenUsed) {
 TEST_F(TrimCapabilitiesPassTest,
        ComputeDerivativeGroupQuads_ReamainsWithExecMode) {
   const std::string kTest = R"(
-               OpCapability ComputeDerivativeGroupQuadsNV
-               OpCapability ComputeDerivativeGroupLinearNV
-; CHECK-NOT:   OpCapability ComputeDerivativeGroupLinearNV
-; CHECK:       OpCapability ComputeDerivativeGroupQuadsNV
-; CHECK-NOT:   OpCapability ComputeDerivativeGroupLinearNV
+               OpCapability ComputeDerivativeGroupQuadsKHR
+               OpCapability ComputeDerivativeGroupLinearKHR
+; CHECK-NOT:   OpCapability ComputeDerivativeGroupLinearKHR
+; CHECK:       OpCapability ComputeDerivativeGroupQuadsKHR
+; CHECK-NOT:   OpCapability ComputeDerivativeGroupLinearKHR
                OpCapability Shader
 ; CHECK:       OpExtension "SPV_NV_compute_shader_derivatives"
                OpExtension "SPV_NV_compute_shader_derivatives"
@@ -2162,11 +2167,11 @@ TEST_F(TrimCapabilitiesPassTest,
 TEST_F(TrimCapabilitiesPassTest,
        ComputeDerivativeGroupLinear_ReamainsWithExecMode) {
   const std::string kTest = R"(
-               OpCapability ComputeDerivativeGroupLinearNV
-               OpCapability ComputeDerivativeGroupQuadsNV
-; CHECK-NOT:   OpCapability ComputeDerivativeGroupQuadsNV
-; CHECK:       OpCapability ComputeDerivativeGroupLinearNV
-; CHECK-NOT:   OpCapability ComputeDerivativeGroupQuadsNV
+               OpCapability ComputeDerivativeGroupLinearKHR
+               OpCapability ComputeDerivativeGroupQuadsKHR
+; CHECK-NOT:   OpCapability ComputeDerivativeGroupQuadsKHR
+; CHECK:       OpCapability ComputeDerivativeGroupLinearKHR
+; CHECK-NOT:   OpCapability ComputeDerivativeGroupQuadsKHR
                OpCapability Shader
 ; CHECK:       OpExtension "SPV_NV_compute_shader_derivatives"
                OpExtension "SPV_NV_compute_shader_derivatives"
@@ -2358,6 +2363,94 @@ TEST_F(TrimCapabilitiesPassTest,
          %11 = OpLoad %type_image %texture
          %12 = OpImageRead %float4 %11 %int2_00
                OpStore %out_var %12
+               OpReturn
+               OpFunctionEnd
+  )";
+  const auto result =
+      SinglePassRunAndMatch<TrimCapabilitiesPass>(kTest, /* skip_nop= */ false);
+  EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithChange);
+}
+
+TEST_F(TrimCapabilitiesPassTest,
+       StorageImageWriteWithoutFormat_RemainsWhenRequiredWithWrite) {
+  const std::string kTest = R"(
+               OpCapability StorageImageWriteWithoutFormat
+; CHECK:       OpCapability StorageImageWriteWithoutFormat
+               OpCapability Shader
+               OpCapability StorageImageExtendedFormats
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %id %img
+               OpExecutionMode %main LocalSize 8 8 8
+               OpSource HLSL 670
+               OpName %type_image "type.3d.image"
+               OpName %img "img"
+               OpName %main "main"
+               OpDecorate %id BuiltIn GlobalInvocationId
+               OpDecorate %img DescriptorSet 0
+               OpDecorate %img Binding 0
+      %float = OpTypeFloat 32
+    %float_4 = OpConstant %float 4
+    %float_5 = OpConstant %float 5
+    %v2float = OpTypeVector %float 2
+          %9 = OpConstantComposite %v2float %float_4 %float_5
+ %type_image = OpTypeImage %float 3D 2 0 0 2 Unknown
+    %ptr_img = OpTypePointer UniformConstant %type_image
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+  %ptr_input = OpTypePointer Input %v3uint
+       %void = OpTypeVoid
+         %15 = OpTypeFunction %void
+        %img = OpVariable %ptr_img UniformConstant
+         %id = OpVariable %ptr_input Input
+       %main = OpFunction %void None %15
+         %16 = OpLabel
+         %17 = OpLoad %v3uint %id
+         %18 = OpLoad %type_image %img
+               OpImageWrite %18 %17 %9 None
+               OpReturn
+               OpFunctionEnd
+  )";
+  const auto result =
+      SinglePassRunAndMatch<TrimCapabilitiesPass>(kTest, /* skip_nop= */ false);
+  EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithoutChange);
+}
+
+TEST_F(TrimCapabilitiesPassTest,
+       StorageImageWriteWithoutFormat_RemovedWithWriteOnKnownFormat) {
+  const std::string kTest = R"(
+               OpCapability StorageImageWriteWithoutFormat
+; CHECK-NOT:   OpCapability StorageImageWriteWithoutFormat
+               OpCapability Shader
+               OpCapability StorageImageExtendedFormats
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %id %img
+               OpExecutionMode %main LocalSize 8 8 8
+               OpSource HLSL 670
+               OpName %type_image "type.3d.image"
+               OpName %img "img"
+               OpName %main "main"
+               OpDecorate %id BuiltIn GlobalInvocationId
+               OpDecorate %img DescriptorSet 0
+               OpDecorate %img Binding 0
+      %float = OpTypeFloat 32
+    %float_4 = OpConstant %float 4
+    %float_5 = OpConstant %float 5
+    %v2float = OpTypeVector %float 2
+          %9 = OpConstantComposite %v2float %float_4 %float_5
+ %type_image = OpTypeImage %float 3D 2 0 0 2 Rg32f
+    %ptr_img = OpTypePointer UniformConstant %type_image
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+  %ptr_input = OpTypePointer Input %v3uint
+       %void = OpTypeVoid
+         %15 = OpTypeFunction %void
+        %img = OpVariable %ptr_img UniformConstant
+         %id = OpVariable %ptr_input Input
+       %main = OpFunction %void None %15
+         %16 = OpLabel
+         %17 = OpLoad %v3uint %id
+         %18 = OpLoad %type_image %img
+               OpImageWrite %18 %17 %9 None
                OpReturn
                OpFunctionEnd
   )";
@@ -3147,6 +3240,69 @@ TEST_P(TrimCapabilitiesPassTestSubgroupClustered_Unsigned,
   const auto result = SinglePassRunAndMatch<TrimCapabilitiesPass>(
       kTest, /* do_validation= */ true);
   EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithChange);
+}
+
+TEST_F(TrimCapabilitiesPassTest, InterpolationFunction_RemovedIfNotUsed) {
+  const std::string kTest = R"(
+               OpCapability Shader
+               OpCapability InterpolationFunction
+; CHECK-NOT:   OpCapability InterpolationFunction
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %out_var_SV_Target
+               OpExecutionMode %main OriginUpperLeft
+               OpSource HLSL 660
+               OpName %out_var_SV_Target "out.var.SV_Target"
+               OpName %main "main"
+               OpDecorate %out_var_SV_Target Location 0
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+       %void = OpTypeVoid
+          %7 = OpTypeFunction %void
+%out_var_SV_Target = OpVariable %_ptr_Output_v4float Output
+       %main = OpFunction %void None %7
+          %8 = OpLabel
+               OpReturn
+               OpFunctionEnd
+  )";
+  const auto result =
+      SinglePassRunAndMatch<TrimCapabilitiesPass>(kTest, /* skip_nop= */ false);
+  EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithChange);
+}
+
+TEST_F(TrimCapabilitiesPassTest,
+       InterpolationFunction_RemainsWithInterpolateAtCentroid) {
+  const std::string kTest = R"(
+               OpCapability Shader
+               OpCapability InterpolationFunction
+; CHECK:       OpCapability InterpolationFunction
+     %std450 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %out_var_SV_Target %gl_PointCoord
+               OpExecutionMode %main OriginUpperLeft
+               OpSource HLSL 660
+               OpName %out_var_SV_Target "out.var.SV_Target"
+               OpName %main "main"
+               OpDecorate %out_var_SV_Target Location 0
+               OpDecorate %gl_PointCoord BuiltIn PointCoord
+      %float = OpTypeFloat 32
+    %v2float = OpTypeVector %float 2
+    %v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+       %void = OpTypeVoid
+          %7 = OpTypeFunction %void
+%out_var_SV_Target = OpVariable %_ptr_Output_v4float Output
+%gl_PointCoord = OpVariable %_ptr_Input_v2float Input
+       %main = OpFunction %void None %7
+          %8 = OpLabel
+          %9 = OpExtInst %v4float %std450 InterpolateAtCentroid %gl_PointCoord
+               OpReturn
+               OpFunctionEnd
+  )";
+  const auto result =
+      SinglePassRunAndMatch<TrimCapabilitiesPass>(kTest, /* skip_nop= */ false);
+  EXPECT_EQ(std::get<1>(result), Pass::Status::SuccessWithoutChange);
 }
 
 INSTANTIATE_TEST_SUITE_P(
