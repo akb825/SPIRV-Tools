@@ -1,5 +1,5 @@
-#!/bin/bash
-# Copyright (c) 2025 Google LLC
+#!/usr/bin/env bash
+# Copyright (c) 2019 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fail on any error.
-set -e
+set -e # Fail on any error.
 
-SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd )"
-SRC_ROOT="$( cd "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd )"
-TARGET_BRANCH="${KOKORO_GITHUB_PULL_REQUEST_TARGET_BRANCH-main}"
+ROOT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-docker run --rm -i \
-  --volume "${SRC_ROOT}:${SRC_ROOT}" \
-  --workdir "${SRC_ROOT}" \
-  "us-east4-docker.pkg.dev/shaderc-build/radial-docker/ubuntu-24.04-amd64/formatter" \
-  "${SCRIPT_DIR}/build-docker.sh" "${TARGET_BRANCH}"
+pushd ${ROOT_PATH}
+    go run ./src/tools/gen-grammar.go --cache ./cache --template ./spirv.json.tmpl --out ./spirv.json
+    go run ./src/tools/gen-grammar.go --cache ./cache --template ./src/schema/schema.go.tmpl --out ./src/schema/schema.go
+
+    mkdir -p ./spirvls
+    cp ./spirv.json ./spirvls
+
+    go build -o ./spirvls/spirvls ./src/langsvr.go
+popd
