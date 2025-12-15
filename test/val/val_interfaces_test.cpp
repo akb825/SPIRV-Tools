@@ -215,9 +215,9 @@ OpFunctionEnd
 
   CompileSuccessfully(text, SPV_ENV_UNIVERSAL_1_4);
   EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_UNIVERSAL_1_4));
-  EXPECT_THAT(
-      getDiagnosticString(),
-      HasSubstr("Non-unique OpEntryPoint interface '2[%var]' is disallowed"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("In SPIR-V 1.4 or later, non-unique OpEntryPoint "
+                        "interface '2[%var]' is disallowed"));
 }
 
 TEST_F(ValidateInterfacesTest, MissingGlobalVarSPV1p3) {
@@ -1668,7 +1668,7 @@ TEST_F(ValidateInterfacesTest, InvalidLocationTypePointer) {
               HasSubstr("Invalid type to assign a location"));
 }
 
-TEST_F(ValidateInterfacesTest, ValidLocationTypePhysicalStorageBufferPointer) {
+TEST_F(ValidateInterfacesTest, PhysicalStorageBufferPointer) {
   const std::string text = R"(
 OpCapability Shader
 OpCapability PhysicalStorageBufferAddresses
@@ -1677,10 +1677,10 @@ OpEntryPoint Vertex %main "main" %var
 OpDecorate %var Location 0
 OpDecorate %var RestrictPointer
 %void = OpTypeVoid
-%int = OpTypeInt 32 0
-%ptr = OpTypePointer PhysicalStorageBuffer %int
-%ptr2 = OpTypePointer Input %ptr
-%var = OpVariable %ptr2 Input
+%uint = OpTypeInt 32 0
+%psb_ptr = OpTypePointer PhysicalStorageBuffer %uint
+%in_ptr = OpTypePointer Input %psb_ptr
+%var = OpVariable %in_ptr Input
 %void_fn = OpTypeFunction %void
 %main = OpFunction %void None %void_fn
 %entry = OpLabel
@@ -1688,7 +1688,139 @@ OpReturn
 OpFunctionEnd
 )";
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
-  EXPECT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-Input-09557"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Input/Output interface variable id <2> contains a "
+                        "PhysicalStorageBuffer pointer, which is not allowed"));
+}
+
+TEST_F(ValidateInterfacesTest, PhysicalStorageBufferPointerArray) {
+  const std::string text = R"(
+  OpCapability Shader
+  OpCapability PhysicalStorageBufferAddresses
+  OpMemoryModel PhysicalStorageBuffer64 GLSL450
+  OpEntryPoint Vertex %main "main" %var
+  OpDecorate %var Location 0
+  OpDecorate %var RestrictPointer
+  %void = OpTypeVoid
+  %uint = OpTypeInt 32 0
+  %uint_3 = OpConstant %uint 3
+  %psb_ptr = OpTypePointer PhysicalStorageBuffer %uint
+  %array = OpTypeArray %psb_ptr %uint_3
+  %in_ptr = OpTypePointer Input %array
+  %var = OpVariable %in_ptr Input
+  %void_fn = OpTypeFunction %void
+  %main = OpFunction %void None %void_fn
+  %entry = OpLabel
+  OpReturn
+  OpFunctionEnd
+  )";
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-Input-09557"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Input/Output interface variable id <2> contains a "
+                        "PhysicalStorageBuffer pointer, which is not allowed"));
+}
+TEST_F(ValidateInterfacesTest, PhysicalStorageBufferPointerStruct) {
+  const std::string text = R"(
+  OpCapability Shader
+  OpCapability PhysicalStorageBufferAddresses
+  OpMemoryModel PhysicalStorageBuffer64 GLSL450
+  OpEntryPoint Vertex %main "main" %var
+  OpDecorate %var Location 0
+  OpDecorate %var RestrictPointer
+  %void = OpTypeVoid
+  %int = OpTypeInt 32 1
+  OpTypeForwardPointer %psb_ptr PhysicalStorageBuffer
+  %struct_0 = OpTypeStruct %int %psb_ptr
+  %struct_1 = OpTypeStruct %int %int
+  %psb_ptr = OpTypePointer PhysicalStorageBuffer %struct_1
+  %in_ptr = OpTypePointer Input %struct_0
+  %var = OpVariable %in_ptr Input
+  %void_fn = OpTypeFunction %void
+  %main = OpFunction %void None %void_fn
+  %entry = OpLabel
+  OpReturn
+  OpFunctionEnd
+  )";
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-Input-09557"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Input/Output interface variable id <2> contains a "
+                        "PhysicalStorageBuffer pointer, which is not allowed"));
+}
+
+TEST_F(ValidateInterfacesTest, PhysicalStorageBufferPointerArrayOfStruct) {
+  const std::string text = R"(
+  OpCapability Shader
+  OpCapability PhysicalStorageBufferAddresses
+  OpMemoryModel PhysicalStorageBuffer64 GLSL450
+  OpEntryPoint Vertex %main "main" %var
+  OpDecorate %var Location 0
+  OpDecorate %var RestrictPointer
+  %void = OpTypeVoid
+  %int = OpTypeInt 32 1
+  %uint = OpTypeInt 32 0
+  %uint_3 = OpConstant %uint 3
+  OpTypeForwardPointer %psb_ptr PhysicalStorageBuffer
+  %array_1 = OpTypeArray %psb_ptr %uint_3
+  %struct_0 = OpTypeStruct %int %array_1
+   %struct_1 = OpTypeStruct %int %int
+  %psb_ptr = OpTypePointer PhysicalStorageBuffer %struct_1
+  %array_0 = OpTypeArray %struct_0 %uint_3
+  %in_ptr = OpTypePointer Input %array_0
+  %var = OpVariable %in_ptr Input
+  %void_fn = OpTypeFunction %void
+  %main = OpFunction %void None %void_fn
+  %entry = OpLabel
+  OpReturn
+  OpFunctionEnd
+  )";
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-Input-09557"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Input/Output interface variable id <2> contains a "
+                        "PhysicalStorageBuffer pointer, which is not allowed"));
+}
+
+TEST_F(ValidateInterfacesTest, PhysicalStorageBufferPointerNestedStruct) {
+  const std::string text = R"(
+  OpCapability Shader
+  OpCapability PhysicalStorageBufferAddresses
+  OpMemoryModel PhysicalStorageBuffer64 GLSL450
+  OpEntryPoint Vertex %main "main" %var
+  OpDecorate %var Location 0
+  OpDecorate %var RestrictPointer
+  %void = OpTypeVoid
+  %int = OpTypeInt 32 1
+  OpTypeForwardPointer %psb_ptr PhysicalStorageBuffer
+  %struct_0 = OpTypeStruct %int %psb_ptr
+  %struct_1 = OpTypeStruct %int %int
+  %psb_ptr = OpTypePointer PhysicalStorageBuffer %struct_1
+  %struct_2 = OpTypeStruct %int %struct_0
+  %in_ptr = OpTypePointer Input %struct_2
+  %var = OpVariable %in_ptr Input
+  %void_fn = OpTypeFunction %void
+  %main = OpFunction %void None %void_fn
+  %entry = OpLabel
+  OpReturn
+  OpFunctionEnd
+  )";
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  EXPECT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              AnyVUID("VUID-StandaloneSpirv-Input-09557"));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Input/Output interface variable id <2> contains a "
+                        "PhysicalStorageBuffer pointer, which is not allowed"));
 }
 
 TEST_F(ValidateInterfacesTest, UntypedVariableInputMissing) {
@@ -1805,6 +1937,101 @@ OpFunctionEnd
   SetAssembleOptions(SPV_TEXT_TO_BINARY_OPTION_PRESERVE_NUMERIC_IDS);
   CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
   EXPECT_EQ(SPV_SUCCESS, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+}
+
+TEST_F(ValidateInterfacesTest,
+       InvalidBfloat16VariableWithInputOutputStorageClass) {
+  const std::string text = R"(
+OpCapability Shader
+OpCapability BFloat16TypeKHR
+OpExtension "SPV_KHR_bfloat16"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %in %out
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %in Location 0
+OpDecorate %out Location 0
+%void = OpTypeVoid
+%bfloat16 = OpTypeFloat 16 BFloat16KHR
+%in_ptr = OpTypePointer Input %bfloat16
+%out_ptr = OpTypePointer Output %bfloat16
+%in = OpVariable %in_ptr Input
+%out = OpVariable %out_ptr Output
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(getDiagnosticString(),
+              HasSubstr("Bfloat16 OpVariable <id> '2[%2]' must not be declared "
+                        "with a Storage Class of Input or Output.\n"));
+}
+
+TEST_F(ValidateInterfacesTest,
+       InvalidFP8E4M3VariableWithInputOutputStorageClass) {
+  const std::string text = R"(
+OpCapability Shader
+OpCapability Float8EXT
+OpExtension "SPV_EXT_float8"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %in %out
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %in Location 0
+OpDecorate %out Location 0
+%void = OpTypeVoid
+%fp8e4m3 = OpTypeFloat 8 Float8E4M3EXT
+%in_ptr = OpTypePointer Input %fp8e4m3
+%out_ptr = OpTypePointer Output %fp8e4m3
+%in = OpVariable %in_ptr Input
+%out = OpVariable %out_ptr Output
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("FP8 E4M3/E5M2 OpVariable <id> '2[%2]' must not be declared "
+                "with a Storage Class of Input or Output.\n"));
+}
+
+TEST_F(ValidateInterfacesTest,
+       InvalidFP8E5M2VariableWithInputOutputStorageClass) {
+  const std::string text = R"(
+OpCapability Shader
+OpCapability Float8EXT
+OpExtension "SPV_EXT_float8"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %in %out
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %in Location 0
+OpDecorate %out Location 0
+%void = OpTypeVoid
+%fp8e5m2 = OpTypeFloat 8 Float8E5M2EXT
+%in_ptr = OpTypePointer Input %fp8e5m2
+%out_ptr = OpTypePointer Output %fp8e5m2
+%in = OpVariable %in_ptr Input
+%out = OpVariable %out_ptr Output
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd
+)";
+
+  CompileSuccessfully(text, SPV_ENV_VULKAN_1_3);
+  ASSERT_EQ(SPV_ERROR_INVALID_ID, ValidateInstructions(SPV_ENV_VULKAN_1_3));
+  EXPECT_THAT(
+      getDiagnosticString(),
+      HasSubstr("FP8 E4M3/E5M2 OpVariable <id> '2[%2]' must not be declared "
+                "with a Storage Class of Input or Output.\n"));
 }
 
 }  // namespace
